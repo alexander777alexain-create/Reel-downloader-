@@ -3,13 +3,18 @@ import logging
 import requests
 import re
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.constants import ChatAction  # 🔥 yeh sahi import hai
+from telegram.constants import ChatAction
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler, ContextTypes
 
 # ---------- CONFIG ----------
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
-API_URL = os.environ.get('API_URL', 'https://insta-download-sepia.vercel.app/api/download')
-DEVELOPER_USERNAME = os.environ.get('DEVELOPER_USERNAME', 'teamkohinoor')
+API_URL = os.environ.get('API_URL')  # No default — must be set in env
+DEVELOPER_USERNAME = os.environ.get('DEVELOPER_USERNAME', 'll_VIPIN_ll')
+
+if not BOT_TOKEN:
+    raise ValueError("BOT_TOKEN environment variable not set")
+if not API_URL:
+    raise ValueError("API_URL environment variable not set")
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -64,7 +69,7 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (
         "🤖 *Instagram Downloader Bot*\n\n"
-        "Built with ❤️ for KOHINOOR\n\n"
+        "Built with ❤️ for our LOVELY PEOPLE.\n\n"
         f"👨‍💻 Developer: @{DEVELOPER_USERNAME}"
     )
     await update.message.reply_text(msg, parse_mode='Markdown')
@@ -77,7 +82,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ No Instagram link found.")
         return
 
-    # Typing indicator
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.UPLOAD_VIDEO)
 
     result = fetch_media(url)
@@ -98,7 +102,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ],
             [
                 InlineKeyboardButton("ℹ️ Info", callback_data=f"info_{url}"),
-                InlineKeyboardButton("👨‍💻 Developer", callback_data="developer")
+                InlineKeyboardButton("👨‍💻 Developer", url=f"https://t.me/{DEVELOPER_USERNAME}")
             ]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -143,7 +147,7 @@ async def redownload(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ],
             [
                 InlineKeyboardButton("ℹ️ Info", callback_data=f"info_{url}"),
-                InlineKeyboardButton("👨‍💻 Developer", callback_data="developer")
+                InlineKeyboardButton("👨‍💻 Developer", url=f"https://t.me/{DEVELOPER_USERNAME}")
             ]
         ]
         try:
@@ -182,27 +186,18 @@ async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await query.edit_message_caption("❌ Could not fetch info.")
 
-async def developer(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    msg = f"👨‍💻 *Developer*\n\nUsername: @{DEVELOPER_USERNAME}\n\nBuilt with ❤️ for KOHINOOR"
-    await query.edit_message_caption(caption=msg, parse_mode='Markdown')
-
 # ---------- MAIN ----------
 def main():
-    if not BOT_TOKEN:
-        raise ValueError("BOT_TOKEN not set")
+    app = Application.builder().token(BOT_TOKEN).build()
 
     delete_webhook(BOT_TOKEN)
 
-    app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler('start', start))
     app.add_handler(CommandHandler('help', help_cmd))
     app.add_handler(CommandHandler('about', about))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(CallbackQueryHandler(redownload, pattern=r'^redownload_'))
     app.add_handler(CallbackQueryHandler(info, pattern=r'^info_'))
-    app.add_handler(CallbackQueryHandler(developer, pattern=r'^developer$'))
     logger.info("Bot started...")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
