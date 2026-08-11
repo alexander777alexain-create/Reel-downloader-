@@ -30,6 +30,18 @@ def fetch_media(url, quality='high'):
     except Exception as e:
         return {'error': str(e)}
 
+def delete_webhook(token):
+    """Delete webhook before starting polling"""
+    try:
+        url = f"https://api.telegram.org/bot{token}/deleteWebhook"
+        resp = requests.get(url, timeout=5)
+        if resp.status_code == 200:
+            logger.info("Webhook deleted successfully")
+        else:
+            logger.warning(f"Webhook delete failed: {resp.text}")
+    except Exception as e:
+        logger.warning(f"Webhook delete error: {e}")
+
 # ---------- COMMANDS ----------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -203,6 +215,10 @@ async def developer(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     if not BOT_TOKEN:
         raise ValueError("BOT_TOKEN not set")
+    
+    # 🔥 FIX: Delete webhook before polling
+    delete_webhook(BOT_TOKEN)
+    
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler('start', start))
     app.add_handler(CommandHandler('help', help_cmd))
