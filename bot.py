@@ -75,7 +75,7 @@ async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(msg, parse_mode='Markdown')
 
-# ---------- MAIN HANDLER: Link Detected → Show Quality Buttons ----------
+# ---------- MAIN HANDLER ----------
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     url = extract_instagram_url(text)
@@ -84,23 +84,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ No Instagram link found. Send a valid URL.")
         return
     
-    # Save URL in user_data for later use
     context.user_data['pending_url'] = url
     
-    # Quality selection keyboard
     keyboard = [
         [
             InlineKeyboardButton("🔽 Low", callback_data=f"quality_low_{url}"),
             InlineKeyboardButton("🟡 Medium", callback_data=f"quality_medium_{url}"),
             InlineKeyboardButton("🔼 High", callback_data=f"quality_high_{url}")
         ],
-        [
-            InlineKeyboardButton("❌ Cancel", callback_data="cancel")
-        ]
+        [InlineKeyboardButton("❌ Cancel", callback_data="cancel")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    # Reply to the user's message
     await update.message.reply_text(
         "🎯 *Select video quality:*\n\n"
         "Low → Fast download, smaller size\n"
@@ -120,7 +115,6 @@ async def quality_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("❌ Cancelled.")
         return
     
-    # Parse: quality_low_URL
     parts = data.split('_', 2)
     if len(parts) < 3:
         await query.edit_message_text("❌ Invalid request.")
@@ -129,10 +123,8 @@ async def quality_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     quality = parts[1]
     url = parts[2]
     
-    # Update message: fetching...
     await query.edit_message_text(f"⏳ Fetching video in *{quality.upper()}* quality...", parse_mode='Markdown')
     
-    # Fetch media
     result = fetch_media(url, quality)
     
     if result.get('success'):
@@ -140,14 +132,12 @@ async def quality_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         username = result.get('username', 'Unknown')
         caption_text = result.get('caption', '')[:200]
         
-        # Build caption
         caption = (
             f"🎬 *{username}*\n\n"
             f"{caption_text}\n\n"
             f"📊 Quality: *{quality.upper()}*"
         )
         
-        # Inline buttons
         keyboard = [
             [
                 InlineKeyboardButton("📥 Download", url=video_url),
@@ -157,13 +147,10 @@ async def quality_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 InlineKeyboardButton("ℹ️ Info", callback_data=f"info_{url}"),
                 InlineKeyboardButton("🔁 Re-download", callback_data=f"redownload_{quality}_{url}")
             ],
-            [
-                InlineKeyboardButton(f"👨‍💻 Developer", callback_data="developer")
-            ]
+            [InlineKeyboardButton(f"👨‍💻 Developer", callback_data="developer")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        # Send video as reply to original message (using reply_to_message_id)
         try:
             await query.message.reply_video(
                 video=video_url,
@@ -173,8 +160,7 @@ async def quality_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 supports_streaming=True
             )
             await query.edit_message_text("✅ Video sent!")
-        except Exception as e:
-            # fallback: send as document
+        except Exception:
             await query.message.reply_document(
                 document=video_url,
                 caption=f"📁 {username}\n\n{caption_text}",
@@ -185,7 +171,7 @@ async def quality_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         error = result.get('error', 'Unknown error')
         await query.edit_message_text(f"❌ Failed: {error}")
 
-# ---------- CHANGE QUALITY (from video buttons) ----------
+# ---------- CHANGE QUALITY ----------
 async def change_quality(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -255,7 +241,7 @@ async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await query.edit_message_caption("❌ Could not fetch info.")
 
-# ---------- DEVELOPER BUTTON ----------
+# ---------- DEVELOPER ----------
 async def developer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -279,15 +265,12 @@ def main():
     
     app = Application.builder().token(BOT_TOKEN).build()
     
-    # Commands
     app.add_handler(CommandHandler('start', start))
     app.add_handler(CommandHandler('help', help_cmd))
     app.add_handler(CommandHandler('about', about))
     
-    # Message handler (for links)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    # Callbacks
     app.add_handler(CallbackQueryHandler(quality_callback, pattern=r'^quality_'))
     app.add_handler(CallbackQueryHandler(change_quality, pattern=r'^changequality_'))
     app.add_handler(CallbackQueryHandler(redownload, pattern=r'^redownload_'))
