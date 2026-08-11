@@ -15,52 +15,42 @@ logger = logging.getLogger(__name__)
 
 # ---------- HELPERS ----------
 def extract_instagram_url(text):
-    """Extract first Instagram URL from text"""
     pattern = r'(https?://(?:www\.)?instagram\.com/(?:reel|p|tv|stories)/[a-zA-Z0-9_-]+(?:\?[^\s]*)?)'
     match = re.search(pattern, text)
     return match.group(1) if match else None
 
 def fetch_media(url, quality='high'):
-    """Call the API and return data"""
     try:
-        resp = requests.get(
-            API_URL,
-            params={'url': url, 'quality': quality},
-            timeout=30
-        )
+        resp = requests.get(API_URL, params={'url': url, 'quality': quality}, timeout=30)
         if resp.status_code == 200:
             return resp.json()
         return {'error': f'API returned {resp.status_code}'}
     except requests.Timeout:
-        return {'error': '⏳ Timeout — video bada hai, low quality try karo'}
+        return {'error': '⏳ Timeout — try low quality'}
     except Exception as e:
         return {'error': str(e)}
 
-# ---------- BOT COMMANDS ----------
+# ---------- COMMANDS ----------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     msg = (
         f"👋 Hello {user.first_name}!\n\n"
-        "Send me any Instagram link and I'll download it for you.\n\n"
+        "Send me any Instagram link and I'll download it.\n\n"
         "📌 Supported: Reels, Posts, Carousels, Stories\n"
-        "🎯 Select quality when you send a link.\n\n"
-        "Just paste the link — I'll show you quality options."
+        "🎯 Select quality when you send a link."
     )
     await update.message.reply_text(msg)
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (
         "📖 *How to use:*\n\n"
-        "1️⃣ Send any Instagram link\n"
-        "2️⃣ Bot shows quality buttons (Low/Medium/High)\n"
-        "3️⃣ Select quality → bot sends video\n"
-        "4️⃣ Use buttons to re-download or change quality\n\n"
+        "1️⃣ Send Instagram link\n"
+        "2️⃣ Bot shows quality buttons\n"
+        "3️⃣ Select quality → video sent\n\n"
         "*Commands:*\n"
         "/start — Welcome\n"
         "/help — This message\n"
-        "/about — Bot info\n\n"
-        "*Group mode:*\n"
-        "Bot works in groups too! Just send a link."
+        "/about — Bot info"
     )
     await update.message.reply_text(msg, parse_mode='Markdown')
 
@@ -68,24 +58,18 @@ async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (
         "🤖 *Instagram Downloader Bot*\n\n"
         "Built with ❤️ for KOHINOOR\n\n"
-        "• Uses yt-dlp for extraction\n"
-        "• Quality selection: Low | Medium | High\n"
-        "• 100% free\n\n"
         f"👨‍💻 Developer: @{DEVELOPER_USERNAME}"
     )
     await update.message.reply_text(msg, parse_mode='Markdown')
 
-# ---------- MAIN HANDLER ----------
+# ---------- MESSAGE HANDLER ----------
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     url = extract_instagram_url(text)
-    
     if not url:
-        await update.message.reply_text("❌ No Instagram link found. Send a valid URL.")
+        await update.message.reply_text("❌ No Instagram link found.")
         return
-    
-    context.user_data['pending_url'] = url
-    
+
     keyboard = [
         [
             InlineKeyboardButton("🔽 Low", callback_data=f"quality_low_{url}"),
@@ -94,50 +78,37 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ],
         [InlineKeyboardButton("❌ Cancel", callback_data="cancel")]
     ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
     await update.message.reply_text(
-        "🎯 *Select video quality:*\n\n"
-        "Low → Fast download, smaller size\n"
-        "Medium → Balanced\n"
-        "High → Best quality, larger size",
+        "🎯 *Select video quality:*",
         parse_mode='Markdown',
-        reply_markup=reply_markup
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
-# ---------- QUALITY CALLBACK ----------
+# ---------- CALLBACKS ----------
 async def quality_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    
     data = query.data
     if data == "cancel":
         await query.edit_message_text("❌ Cancelled.")
         return
-    
+
     parts = data.split('_', 2)
     if len(parts) < 3:
         await query.edit_message_text("❌ Invalid request.")
         return
-    
+
     quality = parts[1]
     url = parts[2]
-    
-    await query.edit_message_text(f"⏳ Fetching video in *{quality.upper()}* quality...", parse_mode='Markdown')
-    
+    await query.edit_message_text(f"⏳ Fetching video in *{quality.upper()}*...", parse_mode='Markdown')
+
     result = fetch_media(url, quality)
-    
     if result.get('success'):
         video_url = result.get('video_url')
         username = result.get('username', 'Unknown')
         caption_text = result.get('caption', '')[:200]
-        
-        caption = (
-            f"🎬 *{username}*\n\n"
-            f"{caption_text}\n\n"
-            f"📊 Quality: *{quality.upper()}*"
-        )
-        
+
+        caption = f"🎬 *{username}*\n\n{caption_text}\n\n📊 Quality: *{quality.upper()}*"
         keyboard = [
             [
                 InlineKeyboardButton("📥 Download", url=video_url),
@@ -149,14 +120,12 @@ async def quality_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ],
             [InlineKeyboardButton(f"👨‍💻 Developer", callback_data="developer")]
         ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
         try:
             await query.message.reply_video(
                 video=video_url,
                 caption=caption,
                 parse_mode='Markdown',
-                reply_markup=reply_markup,
+                reply_markup=InlineKeyboardMarkup(keyboard),
                 supports_streaming=True
             )
             await query.edit_message_text("✅ Video sent!")
@@ -164,21 +133,16 @@ async def quality_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_document(
                 document=video_url,
                 caption=f"📁 {username}\n\n{caption_text}",
-                reply_markup=reply_markup
+                reply_markup=InlineKeyboardMarkup(keyboard)
             )
-            await query.edit_message_text("✅ Video sent (as file).")
+            await query.edit_message_text("✅ Sent as file.")
     else:
-        error = result.get('error', 'Unknown error')
-        await query.edit_message_text(f"❌ Failed: {error}")
+        await query.edit_message_text(f"❌ Failed: {result.get('error', 'unknown')}")
 
-# ---------- CHANGE QUALITY ----------
 async def change_quality(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    
-    data = query.data
-    url = data.replace('changequality_', '')
-    
+    url = query.data.replace('changequality_', '')
     keyboard = [
         [
             InlineKeyboardButton("🔽 Low", callback_data=f"quality_low_{url}"),
@@ -193,22 +157,17 @@ async def change_quality(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
-# ---------- RE-DOWNLOAD ----------
 async def redownload(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    
     data = query.data
     parts = data.split('_', 2)
     if len(parts) < 3:
         await query.edit_message_caption("❌ Invalid request.")
         return
-    
     quality = parts[1]
     url = parts[2]
-    
     await query.edit_message_caption(f"⏳ Re-downloading in *{quality.upper()}*...", parse_mode='Markdown')
-    
     result = fetch_media(url, quality)
     if result.get('success'):
         video_url = result.get('video_url')
@@ -217,14 +176,10 @@ async def redownload(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await query.edit_message_caption(f"❌ Error: {result.get('error', 'unknown')}")
 
-# ---------- INFO ----------
 async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    
-    data = query.data
-    url = data.replace('info_', '')
-    
+    url = query.data.replace('info_', '')
     result = fetch_media(url, 'high')
     if result.get('success'):
         info_text = (
@@ -234,50 +189,31 @@ async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"📊 Media Count: {result.get('media_count', 1)}\n"
             f"🖼 Thumbnail: [Link]({result.get('thumbnail', '#')})"
         )
-        await query.edit_message_caption(
-            caption=info_text,
-            parse_mode='Markdown'
-        )
+        await query.edit_message_caption(caption=info_text, parse_mode='Markdown')
     else:
         await query.edit_message_caption("❌ Could not fetch info.")
 
-# ---------- DEVELOPER ----------
 async def developer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    
-    msg = (
-        f"👨‍💻 *Developer*\n\n"
-        f"Username: @{DEVELOPER_USERNAME}\n\n"
-        f"Built with ❤️ for KOHINOOR\n"
-        f"Hosted on Railway\n"
-        f"Powered by yt-dlp"
-    )
-    await query.edit_message_caption(
-        caption=msg,
-        parse_mode='Markdown'
-    )
+    msg = f"👨‍💻 *Developer*\n\nUsername: @{DEVELOPER_USERNAME}\n\nBuilt with ❤️ for KOHINOOR"
+    await query.edit_message_caption(caption=msg, parse_mode='Markdown')
 
 # ---------- MAIN ----------
 def main():
     if not BOT_TOKEN:
-        raise ValueError("BOT_TOKEN environment variable not set")
-    
+        raise ValueError("BOT_TOKEN not set")
     app = Application.builder().token(BOT_TOKEN).build()
-    
     app.add_handler(CommandHandler('start', start))
     app.add_handler(CommandHandler('help', help_cmd))
     app.add_handler(CommandHandler('about', about))
-    
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    
     app.add_handler(CallbackQueryHandler(quality_callback, pattern=r'^quality_'))
     app.add_handler(CallbackQueryHandler(change_quality, pattern=r'^changequality_'))
     app.add_handler(CallbackQueryHandler(redownload, pattern=r'^redownload_'))
     app.add_handler(CallbackQueryHandler(info, pattern=r'^info_'))
     app.add_handler(CallbackQueryHandler(developer, pattern=r'^developer$'))
     app.add_handler(CallbackQueryHandler(lambda u, c: u.callback_query.edit_message_text("❌ Cancelled."), pattern=r'^cancel$'))
-    
     logger.info("Bot started...")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
