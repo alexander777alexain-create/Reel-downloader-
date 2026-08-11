@@ -2,7 +2,8 @@ import os
 import logging
 import requests
 import re
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ChatAction
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.constants import ChatAction  # 🔥 yeh sahi import hai
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler, ContextTypes
 
 # ---------- CONFIG ----------
@@ -76,6 +77,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ No Instagram link found.")
         return
 
+    # Typing indicator
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.UPLOAD_VIDEO)
 
     result = fetch_media(url)
@@ -87,7 +89,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         caption = f"🎬 *{username}*\n\n{caption_text}"
 
-        # Store URL in context for redownload
         context.user_data['last_url'] = url
 
         keyboard = [
